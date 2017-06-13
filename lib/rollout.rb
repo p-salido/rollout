@@ -18,7 +18,7 @@ class Rollout
         raw_percentage,raw_users,raw_groups,raw_orgs = string.split('|', 4)
         if raw_orgs == '{}'
           raw_orgs = ''
-        elsif raw_orgs.present?
+        elsif raw_orgs =~ %r,\A{.}\z,s
           raise NotImplementedError, "Serialized data includes feature data"
         end
         @percentage = raw_percentage.to_f
@@ -124,7 +124,7 @@ class Rollout
 
       def user_in_active_organization?(user)
         user.organizations.any? do |org|
-          @organizations.include?(org.id)
+          @organizations.include?(user_id(org))
         end
       end
 
