@@ -194,6 +194,18 @@ class Rollout
     end
   end
 
+  def activate_organization(feature, organization)
+    with_feature(feature) do |f|
+      f.add_organization(organization)
+    end
+  end
+
+  def deactivate_organization(feature, organization)
+    with_feature(feature) do |f|
+      f.remove_organization(organization)
+    end
+  end
+
   def activate_user(feature, user)
     with_feature(feature) do |f|
       f.add_user(user)
