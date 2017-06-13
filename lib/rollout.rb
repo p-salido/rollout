@@ -7,7 +7,7 @@ class Rollout
   RAND_BASE = (2**32 - 1) / 100.0
   
   class Feature
-    attr_accessor :groups, :users, :percentage, :data
+    attr_accessor :groups, :users, :percentage, :organizations
     attr_reader :name, :options
 
     def initialize(name, string = nil, opts = {})
@@ -15,18 +15,23 @@ class Rollout
       @name    = name
 
       if string
-        raw_percentage,raw_users,raw_groups,raw_data = string.split('|', 4)
+        raw_percentage,raw_users,raw_groups,raw_orgs = string.split('|', 4)
+        if raw_orgs == '{}'
+          raw_orgs = ''
+        elsif raw_orgs.present?
+          raise NotImplementedError, "Serialized data includes feature data"
+        end
         @percentage = raw_percentage.to_f
         @users = users_from_string(raw_users)
         @groups = groups_from_string(raw_groups)
-        @data = raw_data.nil? || raw_data.strip.empty? ? {} : JSON.parse(raw_data)
+        @organizations = users_from_string(raw_orgs)
       else
         clear
       end
     end
 
     def serialize
-      "#{@percentage}|#{@users.to_a.join(",")}|#{@groups.to_a.join(",")}|#{serialize_data}"
+      "#{@percentage}|#{@users.to_a.join(",")}|#{@groups.to_a.join(",")}|#{@organizations.to_a.join(",")}"
     end
 
     def add_user(user)
@@ -46,11 +51,20 @@ class Rollout
       @groups.delete(group.to_sym)
     end
 
+    def add_organization(org)
+      id = user_id(org)
+      @organizations << id unless @organizations.include?(id)
+    end
+
+    def remove_organization(org)
+      @organizations.delete(user_id(org))
+    end
+
     def clear
       @groups = groups_from_string("")
       @users = users_from_string("")
       @percentage = 0
-      @data = {}
+      @organizations = users_from_string("")
     end
 
     def active?(rollout, user)
@@ -58,7 +72,8 @@ class Rollout
         id = user_id(user)
         user_in_percentage?(id) ||
           user_in_active_users?(id) ||
-            user_in_active_group?(user, rollout)
+            user_in_active_group?(user, rollout) ||
+              user_in_active_organization?(user)
       else
         @percentage == 100
       end
@@ -107,10 +122,10 @@ class Rollout
         end
       end
 
-      def serialize_data
-        return "" unless @data.is_a? Hash
-
-        @data.to_json
+      def user_in_active_organization?(user)
+        user.organizations.any? do |org|
+          @organizations.include?(org.id)
+        end
       end
 
       def users_from_string(raw_users)
@@ -241,18 +256,6 @@ class Rollout
   def get(feature)
     string = @storage.get(key(feature))
     Feature.new(feature, string, @options)
-  end
-
-  def set_feature_data(feature, data)
-    with_feature(feature) do |f|
-      f.data.merge!(data) if data.is_a? Hash
-    end
-  end
-
-  def clear_feature_data(feature)
-    with_feature(feature) do |f|
-      f.data = {}
-    end
   end
 
   def multi_get(*features)
